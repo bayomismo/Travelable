@@ -18,76 +18,77 @@ async function runSeed() {
   let flightCount = 0;
 
   for (const h of hotels) {
-    await db.hotel.upsert({
-      where: { id: h.id },
-      create: {
-        id: h.id, slug: h.slug, name: h.name, description: h.description,
-        city: h.city, country: h.country, countryCode: h.countryCode ?? null,
-        address: h.address ?? null, neighborhood: h.neighborhood ?? null,
-        latitude: h.latitude ?? null, longitude: h.longitude ?? null,
-        starRating: h.starRating ?? null, guestRating: h.guestRating ?? null,
-        reviewCount: h.reviewCount ?? 0, pricePerNight: h.pricePerNight,
-        originalPrice: h.originalPrice ?? null, currency: h.currency,
-        amenities: (h.amenities ?? []) as any,
-        images: (h.images ?? []) as any,
-        highlights: (h.highlights ?? []) as any,
-        policies: (h.policies ?? null) as any,
-        rooms: (h.rooms ?? []) as any,
-        reviews: (h.reviews ?? []) as any,
-        tags: (h.tags ?? []) as any,
-        trending: h.trending ?? false, dealOfTheDay: h.dealOfTheDay ?? false,
-      },
-      update: {
-        slug: h.slug, name: h.name, description: h.description,
-        city: h.city, country: h.country, countryCode: h.countryCode ?? null,
-        address: h.address ?? null, neighborhood: h.neighborhood ?? null,
-        latitude: h.latitude ?? null, longitude: h.longitude ?? null,
-        starRating: h.starRating ?? null, guestRating: h.guestRating ?? null,
-        reviewCount: h.reviewCount ?? 0, pricePerNight: h.pricePerNight,
-        originalPrice: h.originalPrice ?? null, currency: h.currency,
-        amenities: (h.amenities ?? []) as any,
-        images: (h.images ?? []) as any,
-        highlights: (h.highlights ?? []) as any,
-        policies: (h.policies ?? null) as any,
-        rooms: (h.rooms ?? []) as any,
-        reviews: (h.reviews ?? []) as any,
-        tags: (h.tags ?? []) as any,
-        trending: h.trending ?? false, dealOfTheDay: h.dealOfTheDay ?? false,
-      },
-    });
+    const data = {
+      slug: h.slug,
+      name: h.name,
+      description: h.description,
+      city: h.city,
+      country: h.country,
+      countryCode: h.countryCode ?? null,
+      address: h.address ?? null,
+      neighborhood: h.neighborhood ?? null,
+      latitude: h.latitude ?? null,
+      longitude: h.longitude ?? null,
+      starRating: h.starRating ?? null,
+      rating: h.guestRating ?? null,
+      guestRating: h.guestRating ?? null,
+      reviewCount: h.reviewCount ?? 0,
+      pricePerNight: h.pricePerNight,
+      originalPrice: h.originalPrice ?? null,
+      currency: h.currency,
+      amenities: (h.amenities ?? []) as any,
+      images: (h.images ?? []) as any,
+      highlights: (h.highlights ?? []) as any,
+      policies: (h.policies ?? null) as any,
+      rooms: (h.rooms ?? []) as any,
+      tags: (h.tags ?? []) as any,
+      trending: h.trending ?? false,
+      dealOfTheDay: h.dealOfTheDay ?? false,
+    };
+
+    const existing = await db.hotel.findUnique({ where: { id: h.id } });
+    if (existing) {
+      await db.hotel.update({ where: { id: h.id }, data });
+    } else {
+      const bySlug = h.slug ? await db.hotel.findUnique({ where: { slug: h.slug } }) : null;
+      if (bySlug) {
+        await db.hotel.update({ where: { id: bySlug.id }, data });
+      } else {
+        await db.hotel.create({ data: { id: h.id, ...data } });
+      }
+    }
     hotelCount++;
   }
 
   for (const f of flights) {
-    await db.flight.upsert({
-      where: { id: f.id },
-      create: {
-        id: f.id, airline: f.airline, flightNumber: f.flightNumber,
-        fromCity: f.fromCity, fromAirport: f.fromAirport ?? null,
-        toCity: f.toCity, toAirport: f.toAirport ?? null,
-        departure: f.departure, arrival: f.arrival,
-        duration: f.duration, stops: f.stops,
-        stopCities: (f.stopCities ?? []) as any,
-        price: f.price, currency: f.currency,
-        cabinClass: f.cabinClass ?? 'economy',
-        seatsLeft: f.seatsLeft ?? null, co2Kg: f.co2Kg ?? null,
-        amenities: (f.amenities ?? []) as any,
-        trending: f.trending ?? false,
-      },
-      update: {
-        airline: f.airline, flightNumber: f.flightNumber,
-        fromCity: f.fromCity, fromAirport: f.fromAirport ?? null,
-        toCity: f.toCity, toAirport: f.toAirport ?? null,
-        departure: f.departure, arrival: f.arrival,
-        duration: f.duration, stops: f.stops,
-        stopCities: (f.stopCities ?? []) as any,
-        price: f.price, currency: f.currency,
-        cabinClass: f.cabinClass ?? 'economy',
-        seatsLeft: f.seatsLeft ?? null, co2Kg: f.co2Kg ?? null,
-        amenities: (f.amenities ?? []) as any,
-        trending: f.trending ?? false,
-      },
-    });
+    const data = {
+      airline: f.airline,
+      flightNumber: f.flightNumber,
+      departureAirport: f.fromAirport ?? '',
+      arrivalAirport: f.toAirport ?? '',
+      departureCity: f.fromCity,
+      arrivalCity: f.toCity,
+      departureTime: new Date(f.departure),
+      arrivalTime: new Date(f.arrival),
+      duration: f.duration,
+      stops: f.stops,
+      price: f.price,
+      currency: f.currency,
+      class: f.cabinClass ?? 'economy',
+      cabinClass: f.cabinClass ?? 'economy',
+      seatAvailable: f.seatsLeft ?? null,
+      stopCities: (f.stopCities ?? []) as any,
+      co2Kg: f.co2Kg ?? null,
+      amenities: (f.amenities ?? []) as any,
+      trending: f.trending ?? false,
+    };
+
+    const existing = await db.flight.findUnique({ where: { id: f.id } });
+    if (existing) {
+      await db.flight.update({ where: { id: f.id }, data });
+    } else {
+      await db.flight.create({ data: { id: f.id, ...data } });
+    }
     flightCount++;
   }
 
@@ -101,9 +102,8 @@ async function ensureIndexes() {
     `CREATE INDEX IF NOT EXISTS hotel_city_trgm ON "Hotel" USING GIN (city gin_trgm_ops)`,
     `CREATE INDEX IF NOT EXISTS hotel_country_trgm ON "Hotel" USING GIN (country gin_trgm_ops)`,
     `CREATE INDEX IF NOT EXISTS hotel_desc_trgm ON "Hotel" USING GIN (description gin_trgm_ops)`,
-    `CREATE INDEX IF NOT EXISTS hotel_neighborhood_trgm ON "Hotel" USING GIN (neighborhood gin_trgm_ops)`,
-    `CREATE INDEX IF NOT EXISTS flight_fromcity_trgm ON "Flight" USING GIN ("fromCity" gin_trgm_ops)`,
-    `CREATE INDEX IF NOT EXISTS flight_tocity_trgm ON "Flight" USING GIN ("toCity" gin_trgm_ops)`,
+    `CREATE INDEX IF NOT EXISTS flight_from_trgm ON "Flight" USING GIN ("departureCity" gin_trgm_ops)`,
+    `CREATE INDEX IF NOT EXISTS flight_to_trgm ON "Flight" USING GIN ("arrivalCity" gin_trgm_ops)`,
   ];
   const results: { sql: string; ok: boolean; error?: string }[] = [];
   for (const sql of statements) {
