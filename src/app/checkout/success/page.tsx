@@ -35,7 +35,7 @@ interface Booking {
   guests: number;
   status: string;
   paymentStatus: string;
-  itinerary: string | null;
+  itinerary: Record<string, unknown> | null;
   hotelName: string | null;
   hotelCity: string | null;
   hotelCountry: string | null;

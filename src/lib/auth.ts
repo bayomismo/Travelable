@@ -11,6 +11,7 @@
 
 import { cookies } from 'next/headers';
 import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { db } from './db';
 
 const COOKIE = 'tv_session';
@@ -212,7 +213,7 @@ export async function createBooking(input: CreateBookingInput) {
       paymentStatus: 'paid', // simulated payment
       status: 'confirmed',
       confirmationCode: generateConfirmationCode(),
-      itinerary: input.meta ? JSON.stringify(input.meta) : null,
+      itinerary: input.meta ? (input.meta as Prisma.InputJsonValue) : Prisma.JsonNull,
     },
   });
 }
