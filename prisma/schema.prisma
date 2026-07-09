@@ -124,6 +124,7 @@ model Flight {
   duration          Int
   stops             Int       @default(0)
   price             Float
+  originalPrice     Float?
   currency          String    @default("USD")
   class             String    @default("economy")
   cabinClass        String?
