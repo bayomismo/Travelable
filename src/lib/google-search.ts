@@ -1,6 +1,9 @@
 /**
  * Google Custom Search — real travel listings from Booking.com, Expedia,
  * Skyscanner, Kayak, Airbnb, Hotels.com, Trip.com, Agoda.
+ *
+ * Free tier: 100 queries/day. Paid: $5/1000 queries up to 10k/day.
+ * Setup: https://programmablesearchengine.google.com
  */
 
 const GOOGLE_SEARCH_URL = 'https://www.googleapis.com/customsearch/v1';
@@ -21,7 +24,10 @@ interface GoogleSearchResponse {
         ratingvalue?: string;
         reviewcount?: string;
       }>;
-      hproduct?: Array<{ fn?: string; photo?: string }>;
+      hproduct?: Array<{
+        fn?: string;
+        photo?: string;
+      }>;
     };
   }>;
 }
@@ -41,9 +47,25 @@ export interface TravelResult {
   reviews?: number;
 }
 
+/** Sites we'll pull results from based on kind. */
 const SITES: Record<TravelKind, string[]> = {
-  hotel: ['booking.com', 'expedia.com', 'hotels.com', 'agoda.com', 'trip.com', 'kayak.com', 'trivago.com'],
-  flight: ['skyscanner.com', 'kayak.com', 'expedia.com', 'google.com/travel/flights', 'trip.com', 'momondo.com'],
+  hotel: [
+    'booking.com',
+    'expedia.com',
+    'hotels.com',
+    'agoda.com',
+    'trip.com',
+    'kayak.com',
+    'trivago.com',
+  ],
+  flight: [
+    'skyscanner.com',
+    'kayak.com',
+    'expedia.com',
+    'google.com/travel/flights',
+    'trip.com',
+    'momondo.com',
+  ],
 };
 
 export interface SearchOptions {
@@ -58,15 +80,30 @@ export interface SearchOptions {
 const cache = new Map<string, { ts: number; data: TravelResult[] }>();
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
-export async function googleTravelSearch({ query, kind = 'any', checkIn, checkOut, adults, limit = 20 }: SearchOptions): Promise<TravelResult[]> {
+export async function googleTravelSearch({
+  query,
+  kind = 'any',
+  checkIn,
+  checkOut,
+  adults,
+  limit = 20,
+}: SearchOptions): Promise<TravelResult[]> {
   const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
   const cx = process.env.GOOGLE_SEARCH_CX;
   if (!apiKey || !cx) return [];
 
-  const dateHint = checkIn && checkOut ? formatDateHint(checkIn, checkOut) : '';
-  const kindsToSearch: TravelKind[] = kind === 'any' ? ['hotel', 'flight'] : [kind as TravelKind];
+  // Build date snippet like "Aug 1 - Aug 5"
+  const dateHint =
+    checkIn && checkOut
+      ? formatDateHint(checkIn, checkOut)
+      : '';
+
+  // For each kind, run a search constrained to those sites
+  const kindsToSearch: TravelKind[] =
+    kind === 'any' ? ['hotel', 'flight'] : [kind as TravelKind];
 
   const allResults: TravelResult[] = [];
+
   for (const k of kindsToSearch) {
     const siteFilter = SITES[k].map((s) => `site:${s}`).join(' OR ');
     const q = [
@@ -74,7 +111,9 @@ export async function googleTravelSearch({ query, kind = 'any', checkIn, checkOu
       k === 'hotel' ? 'hotel booking' : 'flight booking',
       dateHint,
       adults ? `${adults} guests` : '',
-    ].filter(Boolean).join(' ');
+    ]
+      .filter(Boolean)
+      .join(' ');
 
     const cacheKey = `${k}::${q}`.toLowerCase();
     const cached = cache.get(cacheKey);
@@ -92,13 +131,19 @@ export async function googleTravelSearch({ query, kind = 'any', checkIn, checkOu
       url.searchParams.set('safe', 'active');
 
       const res = await fetch(url.toString(), { cache: 'no-store' });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.error('Google CSE error', res.status, await res.text().catch(() => ''));
+        continue;
+      }
       const data = (await res.json()) as GoogleSearchResponse;
       const results = (data.items ?? []).map((item) => parseItem(item, k));
       cache.set(cacheKey, { ts: Date.now(), data: results });
       allResults.push(...results);
-    } catch {}
+    } catch (e) {
+      console.error('Google CSE fetch failed', e);
+    }
   }
+
   return allResults;
 }
 
@@ -106,14 +151,27 @@ function parseItem(item: NonNullable<GoogleSearchResponse['items']>[number], kin
   const pm = item.pagemap ?? {};
   const product = pm.product?.[0] ?? {};
   const meta = pm.metatags?.[0] ?? {};
-  const priceStr = product.price ?? meta['product:price:amount'] ?? meta['og:price:amount'] ?? extractPriceFromSnippet(item.snippet);
-  const imageUrl = pm.cse_thumbnail?.[0]?.src ?? pm.hproduct?.[0]?.photo ?? meta['og:image'];
+
+  const priceStr =
+    product.price ??
+    meta['product:price:amount'] ??
+    meta['og:price:amount'] ??
+    extractPriceFromSnippet(item.snippet);
+
+  const imageUrl =
+    pm.cse_thumbnail?.[0]?.src ??
+    pm.hproduct?.[0]?.photo ??
+    meta['og:image'];
+
   const ratingStr = product.ratingvalue ?? meta['og:rating'];
   const reviewCountStr = product.reviewcount ?? meta['og:rating_count'];
+
+  // Extract clean source from displayLink (e.g. "booking.com" from "www.booking.com")
   const source = item.displayLink.replace(/^www\./, '');
+
   return {
     kind,
-    title: item.title.replace(/\s+[-|–—]\s+(Booking\.com|Expedia|Hotels\.com|Agoda|Kayak|Skyscanner|Trip\.com).*$/i, '').replace(/\s+\|.*$/, '').trim(),
+    title: cleanTitle(item.title),
     url: item.link,
     snippet: item.snippet,
     source,
@@ -125,7 +183,15 @@ function parseItem(item: NonNullable<GoogleSearchResponse['items']>[number], kin
   };
 }
 
+function cleanTitle(t: string): string {
+  return t
+    .replace(/\s+[-|–—]\s+(Booking\.com|Expedia|Hotels\.com|Agoda|Kayak|Skyscanner|Trip\.com).*$/i, '')
+    .replace(/\s+\|.*$/, '')
+    .trim();
+}
+
 function extractPriceFromSnippet(s: string): string | null {
+  // Look for $123, €456, £789, USD 100, etc.
   const m = s.match(/([\$€£¥]|USD|EUR|GBP|JPY|AUD|CAD)\s?(\d{2,5}(?:[.,]\d{3})*)/i);
   return m ? m[2].replace(/[,.](\d{3})/g, '$1') : null;
 }
@@ -140,7 +206,8 @@ function formatDateHint(checkIn: string, checkOut: string): string {
   try {
     const ci = new Date(checkIn);
     const co = new Date(checkOut);
-    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const fmt = (d: Date) =>
+      d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     return `${fmt(ci)} - ${fmt(co)}`;
   } catch {
     return '';
