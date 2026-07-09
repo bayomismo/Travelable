@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
 }
 
 model User {
@@ -14,114 +16,163 @@ model User {
   passwordHash  String?
   avatar        String?
   phone         String?
-  role          String    @default("user") // user, admin, agent
-  provider      String?   // google, github, credentials
+  role          String    @default("user")
+  provider      String?
   providerId    String?
-  preferences   String?   // JSON: budget, travel style, preferred airlines, etc.
+  preferences   String?
   loyaltyPoints Int       @default(0)
-  tier          String    @default("bronze") // bronze, silver, gold, platinum
+  tier          String    @default("bronze")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-
   searches      Search[]
   bookings      Booking[]
   savedTrips    SavedTrip[]
   reviews       Review[]
+  sessions      Session[]
+  wishlist      WishlistItem[]
+  searchHistory SearchHistory[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
 }
 
 model Search {
-  id          String   @id @default(cuid())
-  userId      String?
-  query       String
-  type        String   // hotel, flight, package
-  filters     Json?
-  results     Json?
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String?
+  query     String
+  type      String
+  filters   Json?
+  results   Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([type, createdAt])
-
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model Hotel {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  city        String
-  country     String
-  address     String?
-  latitude    Float?
-  longitude   Float?
-  starRating  Int?
-  priceRange  String?  // JSON: {min, max, currency}
-  amenities   String?  // JSON array
-  images      String?  // JSON array of URLs
-  aiSummary   String?  // AI-generated analysis
-  provider    String?  // amadeus, booking, expedia, hotelbeds
-  providerId  String?
-  rating      Float?
-  reviewCount Int      @default(0)
-  checkIn     String?
-  checkOut    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String    @id @default(cuid())
+  slug            String?   @unique
+  name            String
+  description     String?
+  city            String
+  country         String
+  countryCode     String?
+  address         String?
+  neighborhood    String?
+  latitude        Float?
+  longitude       Float?
+  starRating      Int?
+  rating          Float?
+  guestRating     Float?
+  reviewCount     Int       @default(0)
+  pricePerNight   Int
+  originalPrice   Int?
+  currency        String    @default("USD")
+  amenities       Json?
+  images          Json?
+  highlights      Json?
+  policies        Json?
+  rooms           Json?
+  tags            Json?
+  trending        Boolean   @default(false)
+  dealOfTheDay    Boolean   @default(false)
+  priceRange      String?
+  aiSummary       String?
+  provider        String?
+  providerId      String?
+  checkIn         String?
+  checkOut        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  reviews         Review[]
+  wishlistItems   WishlistItem[]
 
-  reviews     Review[]
+  @@index([city])
+  @@index([country])
+  @@index([starRating])
+  @@index([rating])
+  @@index([pricePerNight])
+  @@index([trending])
+  @@index([slug])
 }
 
 model Flight {
-  id              String   @id @default(cuid())
-  airline         String
-  airlineCode     String?
-  flightNumber    String?
-  departureAirport String
-  arrivalAirport   String
-  departureCity   String?
-  arrivalCity     String?
-  departureTime   DateTime
-  arrivalTime     DateTime
-  duration        Int      // minutes
-  stops           Int      @default(0)
-  price           Float
-  currency        String   @default("USD")
-  class           String   @default("economy") // economy, business, first
-  seatAvailable  Int?
-  provider        String?  // amadeus, duffel, skyscanner
-  providerId      String?
-  priceAnalysis   String?  // JSON: AI price analysis
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                String    @id @default(cuid())
+  airline           String
+  airlineCode       String?
+  flightNumber      String?
+  departureAirport  String
+  arrivalAirport    String
+  departureCity     String?
+  arrivalCity       String?
+  departureTime     DateTime
+  arrivalTime       DateTime
+  duration          Int
+  stops             Int       @default(0)
+  price             Float
+  currency          String    @default("USD")
+  class             String    @default("economy")
+  cabinClass        String?
+  seatAvailable     Int?
+  stopCities        Json?
+  co2Kg             Float?
+  amenities         Json?
+  trending          Boolean   @default(false)
+  provider          String?
+  providerId        String?
+  priceAnalysis     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  bookings          BookingFlight[]
 
-  bookings        BookingFlight[]
+  @@index([departureCity])
+  @@index([arrivalCity])
 }
 
 model Booking {
-  id              String   @id @default(cuid())
-  userId          String
-  type            String   // hotel, flight, package
-  status          String   @default("pending") // pending, confirmed, cancelled, completed
-  totalPrice      Float
-  currency        String   @default("USD")
-  checkIn         DateTime?
-  checkOut        DateTime?
-  guests          Int      @default(1)
-  specialRequests String?
-  paymentStatus   String   @default("pending") // pending, paid, refunded
-  paymentMethod   String?
-  stripeSessionId String?
+  id               String    @id @default(cuid())
+  userId           String
+  type             String
+  status           String    @default("pending")
+  totalPrice       Float
+  currency         String    @default("USD")
+  checkIn          DateTime?
+  checkOut         DateTime?
+  guests           Int       @default(1)
+  specialRequests  String?
+  paymentStatus    String    @default("pending")
+  paymentMethod    String?
+  stripeSessionId  String?
   confirmationCode String?
-  itinerary       Json?    // JSON: itinerary / hotel snapshot
-  hotelId         String?  // string id from catalogue (no FK)
-  hotelName       String?
-  hotelCity       String?
-  hotelCountry    String?
-  hotelImage      String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  user            User     @relation(fields: [userId], references: [id])
-  flights         BookingFlight[]
+  itinerary        Json?
+  hotelId          String?
+  hotelSlug        String?
+  hotelName        String?
+  hotelCity        String?
+  hotelCountry     String?
+  hotelImage       String?
+  flightId         String?
+  flightAirline    String?
+  flightNumber     String?
+  route            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id])
+  flights          BookingFlight[]
 
   @@index([userId, createdAt])
   @@index([hotelId])
@@ -130,31 +181,29 @@ model Booking {
 }
 
 model BookingFlight {
-  id          String   @id @default(cuid())
-  bookingId   String
-  flightId    String
-  createdAt   DateTime @default(now())
-
-  booking     Booking  @relation(fields: [bookingId], references: [id])
-  flight      Flight   @relation(fields: [flightId], references: [id])
+  id        String   @id @default(cuid())
+  bookingId String
+  flightId  String
+  createdAt DateTime @default(now())
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  flight    Flight   @relation(fields: [flightId], references: [id])
 }
 
 model SavedTrip {
-  id          String   @id @default(cuid())
-  userId      String
-  name        String
-  description String?
-  destinations String? // JSON array
-  startDate   DateTime?
-  endDate     DateTime?
-  budget      Float?
-  currency    String   @default("USD")
-  itinerary   String?  // JSON
-  isPublic    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user        User     @relation(fields: [userId], references: [id])
+  id           String    @id @default(cuid())
+  userId       String
+  name         String
+  description  String?
+  destinations String?
+  startDate    DateTime?
+  endDate      DateTime?
+  budget       Float?
+  currency     String    @default("USD")
+  itinerary    String?
+  isPublic     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id])
 }
 
 model Review {
@@ -165,37 +214,65 @@ model Review {
   rating      Float
   title       String?
   content     String?
-  aiSentiment String?  // positive, neutral, negative
-  createdAt   DateTime @default(now())
+  aiSentiment String?
+  createdAt   DateTime  @default(now())
 
-  user        User     @relation(fields: [userId], references: [id])
-  hotel       Hotel?   @relation(fields: [hotelId], references: [id], onDelete: SetNull)
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotel Hotel? @relation(fields: [hotelId], references: [id], onDelete: SetNull)
+
+  @@index([hotelId])
+  @@index([userId])
 }
 
 model Coupon {
-  id          String   @id @default(cuid())
-  code        String   @unique
-  type        String   // percentage, fixed
-  value       Float
-  minSpend    Float?
-  maxUses     Int?
-  usedCount   Int      @default(0)
-  validFrom   DateTime
-  validUntil  DateTime
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  code       String   @unique
+  type       String
+  value      Float
+  minSpend   Float?
+  maxUses    Int?
+  usedCount  Int      @default(0)
+  validFrom  DateTime
+  validUntil DateTime
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  userId      String?
-  action      String
-  resource    String
-  resourceId  String?
-  metadata    Json?
-  ipAddress   String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
 
   @@index([userId])
   @@index([action, createdAt])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  hotelId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hotelId])
+  @@index([userId])
+}
+
+model SearchHistory {
+  id        String   @id @default(cuid())
+  userId    String?
+  query     String
+  type      String
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
 }
