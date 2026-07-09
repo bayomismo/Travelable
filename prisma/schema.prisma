@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String?
+  avatar        String?
+  phone         String?
+  role          String    @default("user") // user, admin, agent
+  provider      String?   // google, github, credentials
+  providerId    String?
+  preferences   String?   // JSON: budget, travel style, preferred airlines, etc.
+  loyaltyPoints Int       @default(0)
+  tier          String    @default("bronze") // bronze, silver, gold, platinum
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  searches      Search[]
+  bookings      Booking[]
+  savedTrips    SavedTrip[]
+  reviews       Review[]
+}
+
+model Search {
+  id          String   @id @default(cuid())
+  userId      String?
+  query       String
+  type        String   // hotel, flight, package
+  filters     String?  // JSON
+  results     String?  // JSON
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model Hotel {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  city        String
+  country     String
+  address     String?
+  latitude    Float?
+  longitude   Float?
+  starRating  Int?
+  priceRange  String?  // JSON: {min, max, currency}
+  amenities   String?  // JSON array
+  images      String?  // JSON array of URLs
+  aiSummary   String?  // AI-generated analysis
+  provider    String?  // amadeus, booking, expedia, hotelbeds
+  providerId  String?
+  rating      Float?
+  reviewCount Int      @default(0)
+  checkIn     String?
+  checkOut    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reviews     Review[]
+}
+
+model Flight {
+  id              String   @id @default(cuid())
+  airline         String
+  airlineCode     String?
+  flightNumber    String?
+  departureAirport String
+  arrivalAirport   String
+  departureCity   String?
+  arrivalCity     String?
+  departureTime   DateTime
+  arrivalTime     DateTime
+  duration        Int      // minutes
+  stops           Int      @default(0)
+  price           Float
+  currency        String   @default("USD")
+  class           String   @default("economy") // economy, business, first
+  seatAvailable  Int?
+  provider        String?  // amadeus, duffel, skyscanner
+  providerId      String?
+  priceAnalysis   String?  // JSON: AI price analysis
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  bookings        BookingFlight[]
+}
+
+model Booking {
+  id              String   @id @default(cuid())
+  userId          String
+  type            String   // hotel, flight, package
+  status          String   @default("pending") // pending, confirmed, cancelled, completed
+  totalPrice      Float
+  currency        String   @default("USD")
+  checkIn         DateTime?
+  checkOut        DateTime?
+  guests          Int      @default(1)
+  specialRequests String?
+  paymentStatus   String   @default("pending") // pending, paid, refunded
+  paymentMethod   String?
+  stripeSessionId String?
+  confirmationCode String?
+  itinerary       String?  // JSON: itinerary / hotel snapshot
+  hotelId         String?  // string id from catalogue (no FK)
+  hotelName       String?
+  hotelCity       String?
+  hotelCountry    String?
+  hotelImage      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id])
+  flights         BookingFlight[]
+}
+
+model BookingFlight {
+  id          String   @id @default(cuid())
+  bookingId   String
+  flightId    String
+  createdAt   DateTime @default(now())
+
+  booking     Booking  @relation(fields: [bookingId], references: [id])
+  flight      Flight   @relation(fields: [flightId], references: [id])
+}
+
+model SavedTrip {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  destinations String? // JSON array
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Float?
+  currency    String   @default("USD")
+  itinerary   String?  // JSON
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  userId      String
+  hotelId     String?
+  bookingId   String?
+  rating      Float
+  title       String?
+  content     String?
+  aiSentiment String?  // positive, neutral, negative
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+  hotel       Hotel?   @relation(fields: [hotelId], references: [id], onDelete: SetNull)
+}
+
+model Coupon {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  type        String   // percentage, fixed
+  value       Float
+  minSpend    Float?
+  maxUses     Int?
+  usedCount   Int      @default(0)
+  validFrom   DateTime
+  validUntil  DateTime
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  resource    String
+  resourceId  String?
+  metadata    String?  // JSON
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+}

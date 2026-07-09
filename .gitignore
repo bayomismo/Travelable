@@ -1,0 +1,83 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# build output
+.next/
+out/
+build/
+dist/
+.turbo/
+
+# production
+*.tsbuildinfo
+next-env.d.ts
+
+# misc
+.DS_Store
+*.pem
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# local env files
+.env*.local
+.env.development
+.env.production.local
+.env
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+
+# database
+prisma/*.db
+prisma/*.db-journal
+prisma/dev.db
+prisma/migrations/
+
+# editor
+.vscode/
+.idea/
+
+# test artifacts
+coverage/
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# screenshots and debug
+screenshots/
+test-results/
+playwright-report/
+.tmp/
+
+# legacy artifacts (replaced by new build)
+final-screenshot.png
+final-verification.png
+full-page-screenshot.png
+preview-*.png
+screenshot*.png
+*.png
+download/
+
+# leftover dev tools
+mini-services/
+tool-results/
+worklog.md
+bun.lock
+public/index.html
+
+# OS
+.DS_Store
+Thumbs.db
