@@ -253,10 +253,16 @@ model AuditLog {
 }
 
 model WishlistItem {
-  id        String   @id @default(cuid())
-  userId    String
-  hotelId   String
-  createdAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  userId        String
+  hotelId       String
+  hotelSlug     String?
+  hotelName     String?
+  hotelCity     String?
+  hotelImage    String?
+  pricePerNight Int?
+  currency      String?  @default("USD")
+  createdAt     DateTime @default(now())
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
