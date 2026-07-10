@@ -156,16 +156,25 @@ function normalizeHotel(
   };
 }
 
-/** Estimate a price per night in USD based on stars (heuristic). */
+/** Estimate a price per night in USD based on kind + stars (heuristic). */
 export function estimatePrice(hotel: OSMHotel): number {
+  // Hostels / guest houses are cheaper
+  const isBudget = hotel.kind === 'hostel' || hotel.kind === 'guest_house' || hotel.kind === 'apartment';
+  const base: Record<number, number> = isBudget
+    ? { 0: 35, 1: 50, 2: 75, 3: 110, 4: 180, 5: 320 }
+    : { 0: 60, 1: 80, 2: 115, 3: 165, 4: 280, 5: 520 };
+
+  // Vary slightly by name length (deterministic jitter so same hotel = same price)
   const stars = hotel.stars ?? 3;
-  const base: Record<number, number> = {
-    0: 45, // hostel / guest house
-    1: 65,
-    2: 95,
-    3: 140,
-    4: 240,
-    5: 480,
-  };
-  return base[Math.min(Math.max(stars, 0), 5)] ?? 140;
+  const jitter = ((hotel.id.charCodeAt(hotel.id.length - 1) % 11) - 5) * 4;
+  const price = (base[Math.min(Math.max(stars, 0), 5)] ?? 140) + jitter;
+
+  // Add premium for amenities
+  let premium = 0;
+  if (hotel.pool) premium += 25;
+  if (hotel.breakfast) premium += 15;
+  if (hotel.airConditioning) premium += 10;
+  if (hotel.parking) premium += 10;
+
+  return Math.max(35, price + premium);
 }
