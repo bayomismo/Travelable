@@ -44,7 +44,7 @@ export async function searchOSMHotels(city: string, limit = 25): Promise<OSMHote
   // 1. Get city bbox via Nominatim (free, no key)
   const nominatim = await fetch(
     `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1&addressdetails=1`,
-    { headers: { 'User-Agent': 'Travelable/1.0' } }
+    { headers: { 'User-Agent': 'Travelable/1.0 (https://travelable.vercel.app)', 'Accept': 'application/json' } }
   );
   if (!nominatim.ok) return [];
   const geo = (await nominatim.json()) as Array<{
@@ -78,7 +78,13 @@ export async function searchOSMHotels(city: string, limit = 25): Promise<OSMHote
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
+        headers: {
+          'User-Agent': 'Travelable/1.0 (https://travelable.vercel.app; contact@travelable.app)',
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
         body: `data=${encodeURIComponent(query)}`,
+        signal: AbortSignal.timeout(20_000),
       });
       if (!res.ok) continue;
       const data = (await res.json()) as {
