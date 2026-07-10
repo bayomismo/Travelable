@@ -24,6 +24,7 @@ import {
   googleTravelSearch,
   type TravelResult,
 } from '@/lib/google-search';
+import { searchOSMHotels, estimatePrice, type OSMHotel } from '@/lib/openstreetmap';
 import { hotels as localHotels, flights as localFlights } from '@/lib/travel-data';
 
 interface SearchBody {
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
   const textQuery = body.query ?? body.destination ?? body.from ?? '';
 
   // Fire all sources in parallel
-  const [dbHotels, dbFlights, amHotels, amFlights, googleResults] = await Promise.all([
+  const [dbHotels, dbFlights, amHotels, amFlights, googleResults, osmHotels] = await Promise.all([
     (type === 'hotel' || type === 'package' || type === 'any')
       ? searchDbHotels(body, limit).catch(() => [])
       : Promise.resolve([]),
@@ -98,15 +99,57 @@ export async function POST(request: NextRequest) {
           limit,
         }).catch(() => [] as TravelResult[])
       : Promise.resolve([] as TravelResult[]),
+    (type === 'hotel' || type === 'any') && body.destination
+      ? searchOSMHotels(body.destination, limit).catch(() => [] as OSMHotel[])
+      : Promise.resolve([] as OSMHotel[]),
   ]);
 
   // Split Google results by kind
   const googleHotels = googleResults.filter((r) => r.kind === 'hotel');
   const googleFlights = googleResults.filter((r) => r.kind === 'flight');
 
-  // Priority: Google (real, current) → Amadeus → DB → local catalogue
+  // Map OSM hotels to common shape
+  const osmMapped = osmHotels.map((h) => ({
+    id: h.id,
+    slug: h.id,
+    name: h.name,
+    city: h.city,
+    country: h.country,
+    address: h.address,
+    latitude: h.latitude,
+    longitude: h.longitude,
+    starRating: h.stars,
+    guestRating: h.stars ? h.stars * 2 - 1 : undefined, // rough conversion
+    reviewCount: 0,
+    pricePerNight: estimatePrice(h),
+    currency: 'USD',
+    amenities: [
+      h.wifi && 'Wi-Fi',
+      h.breakfast && 'Breakfast',
+      h.pool && 'Pool',
+      h.parking && 'Parking',
+      h.airConditioning && 'Air conditioning',
+      h.pets && 'Pets allowed',
+      h.wheelchair && 'Wheelchair accessible',
+    ].filter(Boolean),
+    images: [],
+    highlights: [],
+    policies: { freeCancellation: false, breakfastIncluded: !!h.breakfast, payAtProperty: true, checkIn: '15:00', checkOut: '11:00' },
+    rooms: [],
+    reviews: [],
+    tags: [h.kind, 'osm'],
+    trending: false,
+    dealOfTheDay: false,
+    source: 'openstreetmap',
+    website: h.website,
+    phone: h.phone,
+  }));
+
+  // Priority: OSM (real, free, no key) → Google → Amadeus → DB → local catalogue
   const hotels =
-    googleHotels.length > 0
+    osmMapped.length > 0
+      ? osmMapped
+      : googleHotels.length > 0
       ? googleHotels
       : amHotels.length > 0
       ? amHotels
@@ -129,7 +172,9 @@ export async function POST(request: NextRequest) {
 
   const insight = await getInsight(textQuery);
 
-  const hotelSource = googleHotels.length > 0
+  const hotelSource = osmMapped.length > 0
+    ? 'openstreetmap'
+    : googleHotels.length > 0
     ? 'google'
     : amHotels.length > 0
     ? 'amadeus'
@@ -155,6 +200,7 @@ export async function POST(request: NextRequest) {
       flights: flightSource,
     },
     integrations: {
+      openstreetmap: true,
       google: googleOn,
       amadeus: amadeusOn,
     },
@@ -306,6 +352,7 @@ export async function GET() {
   return NextResponse.json({
     message: 'POST to this endpoint with a JSON body to search.',
     integrations: {
+      openstreetmap: true, // always on, free
       google: isGoogleSearchConfigured(),
       amadeus: isAmadeusConfigured(),
     },
